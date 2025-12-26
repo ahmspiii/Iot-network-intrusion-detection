@@ -1,0 +1,111 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+import seaborn as sns
+import joblib
+from tqdm import tqdm
+import warnings
+warnings.filterwarnings('ignore')
+
+# ==== data set path ====
+csv_file_path = r"D:\data grad\wataiData\csv\CICIoT2023\output\balanced_dataset" \
+".csv"
+
+# ==== ====
+df = pd.read_csv(csv_file_path)
+
+# ====  ====
+X_columns = [
+    'flow_duration', 'Header_Length', 'Protocol Type', 'Duration',
+    'Rate', 'Srate', 'Drate', 'fin_flag_number', 'syn_flag_number',
+    'rst_flag_number', 'psh_flag_number', 'ack_flag_number',
+    'ece_flag_number', 'cwr_flag_number', 'ack_count',
+    'syn_count', 'fin_count', 'urg_count', 'rst_count', 
+    'HTTP', 'HTTPS', 'DNS', 'Telnet', 'SMTP', 'SSH', 'IRC', 'TCP',
+    'UDP', 'DHCP', 'ARP', 'ICMP', 'IPv', 'LLC', 'Tot sum', 'Min',
+    'Max', 'AVG', 'Std', 'Tot size', 'IAT', 'Number', 'Magnitue',
+    'Radius', 'Covariance', 'Variance', 'Weight'
+]
+y_column = 'label'
+
+# ====  ====
+X = df[X_columns]
+y = df[y_column]
+
+# ====  ====
+label_encoder = LabelEncoder()
+y_encoded = label_encoder.fit_transform(y)
+
+# ==== Train/Test ====
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y_encoded, test_size=0.2, stratify=y_encoded, random_state=42)
+
+# ==== Scaling ====
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# ==== ====
+model = RandomForestClassifier(
+    n_estimators=200,
+    max_depth=20,
+    n_jobs=-1,
+    class_weight='balanced'
+)
+
+# ==== ====
+print("🚀 Training Model...")
+model.fit(X_train_scaled, y_train)
+
+# ==== tqdm ====
+print("🔍 Predicting...")
+y_pred = []
+batch_size = 10000
+for i in tqdm(range(0, len(X_test_scaled), batch_size), desc="Predicting"):
+    batch = X_test_scaled[i:i+batch_size]
+    y_pred.extend(model.predict(batch))
+
+# ==== ====
+y_test_labels = label_encoder.inverse_transform(y_test)
+y_pred_labels = label_encoder.inverse_transform(y_pred)
+
+# ==== ====
+print("\n### Evaluation Metrics ###")
+print('Accuracy       :', accuracy_score(y_test_labels, y_pred_labels))
+print('Recall (macro) :', recall_score(y_test_labels, y_pred_labels, average='macro'))
+print('Precision      :', precision_score(y_test_labels, y_pred_labels, average='macro'))
+print('F1-score       :', f1_score(y_test_labels, y_pred_labels, average='macro'))
+
+# ==== Scaler , Encoder ====
+joblib.dump(model, 'rf_model_8class.pkl')
+print("✅ Saved model to 'rf_model_8class.pkl'")
+
+joblib.dump(scaler, 'scaler.pkl')
+print("✅ Saved scaler to 'scaler.pkl'")
+
+joblib.dump(label_encoder, 'label_encoder.pkl')
+print("✅ Saved label encoder to 'label_encoder.pkl'")
+
+
+pd.DataFrame(scaler.mean_, index=X_columns, columns=['Mean']).to_csv('scaler_means.csv')
+print("📁 Exported scaler means to 'scaler_means.csv'")
+
+# ==== confusion_matrix ====
+cm = confusion_matrix(y_test_labels, y_pred_labels, labels=label_encoder.classes_)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=label_encoder.classes_)
+disp.plot(xticks_rotation=45)
+plt.title("Confusion Matrix")
+plt.tight_layout()
+plt.show()
+
+# ==== ====
+plt.figure(figsize=(10, 5))
+sns.countplot(x=y_test_labels, order=np.unique(y_test_labels))
+plt.title("Test Set Class Distribution")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()

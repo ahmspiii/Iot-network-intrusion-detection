@@ -1,0 +1,127 @@
+import pandas as pd
+import numpy as np
+import os
+from tqdm import tqdm
+from sklearn.model_selection import GridSearchCV
+import warnings
+warnings.filterwarnings('ignore')
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+import seaborn as sns
+import joblib
+
+# === إعداد المسار والملفات ===
+DATASET_DIRECTORY = r"D:\data grad\wataiData\csv\CICIoT2023\\"
+df_sets = sorted([k for k in os.listdir(DATASET_DIRECTORY) if k.endswith('.csv')])
+training_sets = df_sets[:int(len(df_sets)*.8)]
+test_sets = df_sets[int(len(df_sets)*.8):]
+
+# === الخصائص والهدف ===
+X_columns = [
+    'flow_duration', 'Header_Length', 'Protocol Type', 'Duration',
+    'Rate', 'Srate', 'Drate', 'fin_flag_number', 'syn_flag_number',
+    'rst_flag_number', 'psh_flag_number', 'ack_flag_number',
+    'ece_flag_number', 'cwr_flag_number', 'ack_count',
+    'syn_count', 'fin_count', 'urg_count', 'rst_count', 
+    'HTTP', 'HTTPS', 'DNS', 'Telnet', 'SMTP', 'SSH', 'IRC', 'TCP',
+    'UDP', 'DHCP', 'ARP', 'ICMP', 'IPv', 'LLC', 'Tot sum', 'Min',
+    'Max', 'AVG', 'Std', 'Tot size', 'IAT', 'Number', 'Magnitue',
+    'Radius', 'Covariance', 'Variance', 'Weight'
+]
+y_column = 'label'
+
+# === خريطة التصنيفات (7 أو 8 فئات) ===
+dict_7classes = {
+    # DDoS
+    'DDoS-RSTFINFlood': 'DDoS', 'DDoS-PSHACK_Flood': 'DDoS', 'DDoS-SYN_Flood': 'DDoS',
+    'DDoS-UDP_Flood': 'DDoS', 'DDoS-TCP_Flood': 'DDoS', 'DDoS-ICMP_Flood': 'DDoS',
+    'DDoS-SynonymousIP_Flood': 'DDoS', 'DDoS-ACK_Fragmentation': 'DDoS',
+    'DDoS-UDP_Fragmentation': 'DDoS', 'DDoS-ICMP_Fragmentation': 'DDoS',
+    'DDoS-SlowLoris': 'DDoS', 'DDoS-HTTP_Flood': 'DDoS',
+
+    # DoS
+    'DoS-UDP_Flood': 'DoS', 'DoS-SYN_Flood': 'DoS', 'DoS-TCP_Flood': 'DoS', 'DoS-HTTP_Flood': 'DoS',
+
+    # Mirai
+    'Mirai-greeth_flood': 'Mirai', 'Mirai-greip_flood': 'Mirai', 'Mirai-udpplain': 'Mirai',
+
+    # Recon
+    'Recon-PingSweep': 'Recon', 'Recon-OSScan': 'Recon', 'Recon-PortScan': 'Recon',
+    'VulnerabilityScan': 'Recon', 'Recon-HostDiscovery': 'Recon',
+
+    # Spoofing
+    'DNS_Spoofing': 'Spoofing', 'MITM-ArpSpoofing': 'Spoofing',
+
+    # Web
+    'BrowserHijacking': 'Web', 'Backdoor_Malware': 'Web', 'XSS': 'Web',
+    'Uploading_Attack': 'Web', 'SqlInjection': 'Web', 'CommandInjection': 'Web',
+
+    # BruteForce
+    'DictionaryBruteForce': 'BruteForce',
+
+    # Benign
+    'BenignTraffic': 'Benign',
+}
+
+# === مقياس القياس (Scaler) ===
+scaler = StandardScaler()
+for train_set in tqdm(training_sets, desc='Fitting Scaler'):
+    df_train = pd.read_csv(DATASET_DIRECTORY + train_set)
+    scaler.partial_fit(df_train[X_columns])
+
+# === إعداد النموذج ===
+model = RandomForestClassifier(
+    n_estimators=100,
+    max_depth=20,
+    n_jobs=-1,
+    class_weight='balanced'  # تعويض عن عدم توازن الفئات
+)
+
+# === التدريب ===
+for train_set in tqdm(training_sets, desc='Training Model'):
+    d = pd.read_csv(DATASET_DIRECTORY + train_set)
+    d[X_columns] = scaler.transform(d[X_columns])
+    d[y_column] = [dict_7classes[k] for k in d[y_column]]
+    model.fit(d[X_columns], d[y_column])
+    del d
+
+# === الاختبار ===
+y_test = []
+y_pred = []
+
+for test_set in tqdm(test_sets, desc='Testing Model'):
+    d_test = pd.read_csv(DATASET_DIRECTORY + test_set)
+    d_test[X_columns] = scaler.transform(d_test[X_columns])
+    d_test[y_column] = [dict_7classes[k] for k in d_test[y_column]]
+    y_test += list(d_test[y_column].values)
+    y_pred += list(model.predict(d_test[X_columns]))
+
+# === التقارير ===
+print("### Evaluation Metrics (8 classes) ###")
+print('Accuracy       :', accuracy_score(y_test, y_pred))
+print('Recall (macro) :', recall_score(y_test, y_pred, average='macro'))
+print('Precision      :', precision_score(y_test, y_pred, average='macro'))
+print('F1-score       :', f1_score(y_test, y_pred, average='macro'))
+print()
+
+# === حفظ النموذج ===
+joblib.dump(model, 'random_forest_model3.pkl')
+
+# === عرض Confusion Matrix ===
+cm = confusion_matrix(y_test, y_pred, labels=np.unique(y_test))
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=np.unique(y_test))
+disp.plot(xticks_rotation=45)
+plt.title("Confusion Matrix")
+plt.show()
+
+# === تحليل توزيع الفئات في مجموعة الاختبار ===
+df_test_all = pd.concat([pd.read_csv(DATASET_DIRECTORY + f) for f in test_sets])
+df_test_all[y_column] = df_test_all[y_column].map(dict_7classes)
+plt.figure(figsize=(12,6))
+sns.countplot(data=df_test_all, x=y_column, order=sorted(df_test_all[y_column].unique()))
+plt.title('Class Distribution in Test Set')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()

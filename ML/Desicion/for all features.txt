@@ -1,0 +1,61 @@
+import joblib
+from sklearn.tree import export_text
+from collections import Counter
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+# === LabelEncoder ===
+model = joblib.load(r"D:\data grad\wataiData\csv\CICIoT2023\output\rf final high recall\model cross validt\rf_model_final2.pkl")
+label_encoder = joblib.load(r"D:\data grad\wataiData\csv\CICIoT2023\output\rf final high recall\model cross validt\label_encoder3.pkl")
+
+# === ==
+X_columns = [
+    'flow_duration', 'Header_Length', 'Protocol Type', 'Duration',
+    'Rate', 'Srate', 'Drate', 'fin_flag_number', 'syn_flag_number',
+    'rst_flag_number', 'psh_flag_number', 'ack_flag_number',
+    'ece_flag_number', 'cwr_flag_number', 'ack_count',
+    'syn_count', 'fin_count', 'urg_count', 'rst_count', 
+    'HTTP', 'HTTPS', 'DNS', 'Telnet', 'SMTP', 'SSH', 'IRC', 'TCP',
+    'UDP', 'DHCP', 'ARP', 'ICMP', 'IPv', 'LLC', 'Tot sum', 'Min',
+    'Max', 'AVG', 'Std', 'Tot size', 'IAT', 'Number', 'Magnitue',
+    'Radius', 'Covariance', 'Variance', 'Weight', 
+]
+
+# ===  tqdm ===
+feature_counter = Counter()
+class_counter = Counter()
+
+for tree in tqdm(model.estimators_, desc="🔍 Analyzing trees"):
+    tree_text = export_text(tree, feature_names=X_columns, max_depth=3)
+    for line in tree_text.splitlines():
+        if "|---" in line and "<=" in line:
+            feature = line.split("<= ")[0].split("|--- ")[-1].strip()
+            feature_counter[feature] += 1
+        elif "class:" in line:
+            try:
+                class_value = int(float(line.split("class:")[-1].strip()))
+                class_counter[class_value] += 1
+            except:
+                pass  
+
+# == ===
+class_keys = list(class_counter.keys())
+class_names = label_encoder.inverse_transform(class_keys)
+class_counts = dict(zip(class_names, [class_counter[k] for k in class_keys]))
+
+# ======
+top_features = feature_counter.most_common(15)
+features, counts = zip(*top_features)
+
+plt.figure(figsize=(10, 6))
+plt.barh(features, counts, color='skyblue')
+plt.xlabel("Frequency in Top 3 Levels")
+plt.title("Top 15 Features Used in Decision Trees")
+plt.gca().invert_yaxis()
+plt.tight_layout()
+plt.show()
+
+# ===  ===
+print("\n📊 Attack Class Distribution in Top Levels:")
+for name, count in class_counts.items():
+    print(f"{name}: {count}")

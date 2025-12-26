@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #e0f7ff 0%, #f5fbff 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #0f172a;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 18px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+            text-align: center;
+            margin-bottom: 24px;
+            border: 1px solid #cfe9ff;
+            position: relative;
+        }
+        
+        h1 {
+            color: #0f4c75;
+            font-size: 2.6em;
+            margin-bottom: 10px;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 18px;
+            border-radius: 999px;
+            border: 1px solid #cfe9ff;
+            background: #f0f9ff;
+            color: #0f4c75;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+            transition: all 0.25s ease;
+        }
+
+        .theme-toggle:hover {
+            background: #e0f2fe;
+            transform: translateY(-2px);
+        }
+        
+        .btn {
+            padding: 15px 50px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #4cc9f0, #90e0ff);
+            color: #012a4a;
+            transition: all 0.25s ease;
+            margin: 10px;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.28);
+            background: linear-gradient(135deg, #48bfe3, #64dfdf);
+        }
+        
+        .btn.stop {
+            background: linear-gradient(135deg, #ffb4b4, #ff6b6b);
+            color: #7f1d1d;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        
+        .status.active {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status.inactive {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        
+        .panel {
+            background: #ffffff;
+            padding: 24px;
+            border-radius: 18px;
+            box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+            border: 1px solid #e0f2ff;
+        }
+        
+        .panel h2 {
+            color: #1d4f8b;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #4cc9f0;
+        }
+        
+        .chart-box {
+            height: 300px;
+            position: relative;
+        }
+        
+        .result {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, #e3f2ff, #ffffff);
+            border-radius: 14px;
+            margin: 20px 0;
+            border: 1px solid #cde7ff;
+        }
+        
+        .result-class {
+            font-size: 3em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .safe { color: #059669; }
+        .threat { color: #dc2626; }
+        
+        .prob-item {
+            margin: 10px 0;
+        }
+        
+        .prob-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        .prob-bar {
+            height: 25px;
+            background: #edf5ff;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        
+        .prob-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4cc9f0, #90e0ff);
+            transition: width 0.5s;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            color: #012a4a;
+            font-weight: bold;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .stat {
+            background: linear-gradient(135deg, #4cc9f0, #90e0ff);
+            color: #012a4a;
+            padding: 20px;
+            border-radius: 14px;
+            text-align: center;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+        
+        .log {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #edf6ff;
+            padding: 15px;
+            border-radius: 14px;
+        }
+        
+        .log-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #ffffff;
+            border-radius: 10px;
+            border-left: 4px solid #4cc9f0;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+            animation: slideIn 0.3s;
+        }
+        
+        .log-item.threat { border-left-color: #dc3545; }
+        .log-item.safe { border-left-color: #28a745; }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Dark mode overrides */
+        body.dark {
+            background: linear-gradient(135deg, #0b1120 0%, #020617 100%);
+            color: #e5e7eb;
+        }
+
+        body.dark .header {
+            background: radial-gradient(1200px 600px at -10% -20%, rgba(76, 201, 240, 0.16) 0%, rgba(76, 201, 240, 0) 60%),
+                        linear-gradient(135deg, #0f172a 0%, #020617 100%);
+            border-color: rgba(148, 163, 184, 0.4);
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.9);
+        }
+
+        body.dark h1 {
+            color: #e0f2ff;
+        }
+
+        body.dark .theme-toggle {
+            background: rgba(15, 23, 42, 0.9);
+            color: #e5e7eb;
+            border-color: rgba(148, 163, 184, 0.7);
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.9);
+        }
+
+        body.dark .panel {
+            background: radial-gradient(1200px 600px at -10% -20%, rgba(34, 211, 238, 0.10) 0%, rgba(34, 211, 238, 0) 60%),
+                        linear-gradient(135deg, #081726 0%, #0e2236 100%);
+            border-color: rgba(34, 211, 238, 0.55);
+            box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.25), 0 18px 30px rgba(6, 15, 24, 0.9);
+        }
+
+        body.dark .panel h2 {
+            color: #e0f2ff;
+            border-bottom-color: rgba(34, 211, 238, 0.7);
+        }
+
+        body.dark .result {
+            background: radial-gradient(800px 400px at -10% -20%, rgba(34, 211, 238, 0.15) 0%, rgba(34, 211, 238, 0) 60%),
+                        linear-gradient(135deg, #020617 0%, #020617 100%);
+            border-color: rgba(34, 211, 238, 0.5);
+        }
+
+        body.dark .prob-bar {
+            background: rgba(8, 23, 38, 0.9);
+        }
+
+        body.dark .prob-fill {
+            background: linear-gradient(90deg, #22d3ee, #4cc9f0);
+            color: #04111b;
+        }
+
+        body.dark .stat {
+            background: linear-gradient(135deg, #22d3ee, #4cc9f0);
+            color: #04111b;
+        }
+
+        body.dark .log {
+            background: rgba(8, 23, 38, 0.7);
+        }
+
+        body.dark .log-item {
+            background: rgba(15, 23, 42, 0.95);
+            border-left-color: #4cc9f0;
+            color: #e5e7eb;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.9);
+        }
+
+        body.dark .log-time {
+            color: #9ca3af;
+        }
+        
+        .log-time {
+            font-size: 0.85em;
+            color: #6c757d;
+        }
+        
+        @media (max-width: 1200px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button class="theme-toggle" id="themeToggle" type="button" onclick="toggleTheme()">🌞 Light</button>
+            <h1>🛡️ Live Network Monitor</h1>
+            <p style="color: #6c757d; margin-bottom: 15px;">Real-time Packet Capture & Attack Detection</p>
+            <button class="btn" id="startBtn" onclick="start()">🔴 Start Monitoring</button>
+            <button class="btn stop" id="stopBtn" onclick="stop()" style="display:none;">🟢 Stop Monitoring</button>
+            <div class="status inactive" id="status">● Stopped</div>
+        </div>
+
+        <div class="grid">
+            <div>
+                <div class="panel">
+                    <h2>📊 Packet Traffic</h2>
+                    <div class="chart-box">
+                        <canvas id="chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 20px;">
+                    <h2>🎯 Detection Result</h2>
+                    <div class="result">
+                        <div style="color: #6c757d;">Current Threat</div>
+                        <div class="result-class" id="result">Waiting...</div>
+                        <div style="color: #6c757d;" id="conf">-</div>
+                    </div>
+                    <div id="probs"></div>
+                </div>
+            </div>
+
+            <div>
+                <div class="panel">
+                    <h2>📈 Statistics</h2>
+                    <div class="stats">
+                        <div class="stat">
+                            <div class="stat-value" id="scans">0</div>
+                            <div>Scans</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value" id="threats">0</div>
+                            <div>Threats</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 20px;">
+                    <h2>📋 Activity Log</h2>
+                    <div class="log" id="log">
+                        <div class="log-item safe">
+                            <div class="log-time">System Ready</div>
+                            <div>Monitor initialized</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel" style="margin-top: 20px;">
+                    <h2>🌐 Public IPs (External)</h2>
+                    <div class="log" id="public-ips" style="max-height: 250px;">
+                        <div class="log-item safe">
+                            <div class="log-time">Info</div>
+                            <div>No public IPs captured yet</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let monitoring = false;
+        let interval = null;
+        let chart = null;
+        let scans = 0;
+        let threats = 0;
+        let data = [];
+        let labels = [];
+
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.getElementById('themeToggle');
+            const isDark = body.classList.toggle('dark');
+            if (isDark) {
+                btn.textContent = '🌙 Dark';
+            } else {
+                btn.textContent = '🌞 Light';
+            }
+        }
+
+        // Init chart
+        const ctx = document.getElementById('chart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Packets',
+                    data: data,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        function start() {
+            monitoring = true;
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'inline-block';
+            document.getElementById('status').className = 'status active';
+            document.getElementById('status').textContent = '● Monitoring';
+            log('Started', 'Monitoring active', 'safe');
+            
+            interval = setInterval(capture, 10000);
+            capture();
+        }
+
+        function stop() {
+            monitoring = false;
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'none';
+            document.getElementById('status').className = 'status inactive';
+            document.getElementById('status').textContent = '● Stopped';
+            log('Stopped', 'Monitoring stopped', 'safe');
+            
+            clearInterval(interval);
+        }
+
+        async function capture() {
+            try {
+                const res = await fetch('/capture', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    scans++;
+                    document.getElementById('scans').textContent = scans;
+
+                    // Chart
+                    labels.push(data.time);
+                    chart.data.datasets[0].data.push(data.packets);
+                    if (labels.length > 20) {
+                        labels.shift();
+                        chart.data.datasets[0].data.shift();
+                    }
+                    chart.update();
+
+                    // Result
+                    const result = document.getElementById('result');
+                    result.textContent = data.prediction;
+                    result.className = data.prediction === 'Benign' ? 'result-class safe' : 'result-class threat';
+                    
+                    document.getElementById('conf').textContent = 
+                        `Confidence: ${data.probabilities[data.prediction].toFixed(1)}%`;
+
+                    // Threats
+                    if (data.prediction !== 'Benign') {
+                        threats++;
+                        document.getElementById('threats').textContent = threats;
+                    }
+
+                    // Probabilities
+                    showProbs(data.probabilities);
+
+                    // Public IPs
+                    if (Array.isArray(data.public_ips)) {
+                        updatePublicIps(data.public_ips);
+                    }
+
+                    // Log
+                    const icon = data.prediction === 'Benign' ? '✅' : '⚠️';
+                    const type = data.prediction === 'Benign' ? 'safe' : 'threat';
+                    log(data.time, `${icon} ${data.prediction} (${data.packets} packets)`, type);
+                } else {
+                    log('Error', data.error, 'threat');
+                }
+            } catch (e) {
+                log('Error', e.message, 'threat');
+            }
+        }
+
+        function showProbs(probs) {
+            const container = document.getElementById('probs');
+            const sorted = Object.entries(probs).sort((a, b) => b[1] - a[1]);
+            
+            container.innerHTML = '';
+            sorted.forEach(([name, val]) => {
+                const div = document.createElement('div');
+                div.className = 'prob-item';
+                div.innerHTML = `
+                    <div class="prob-label">
+                        <span>${name}</span>
+                        <span>${val.toFixed(1)}%</span>
+                    </div>
+                    <div class="prob-bar">
+                        <div class="prob-fill" style="width: ${val}%">
+                            ${val > 10 ? val.toFixed(0) + '%' : ''}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function updatePublicIps(ips) {
+            const container = document.getElementById('public-ips');
+            if (!container) return;
+
+            container.innerHTML = '';
+
+            if (!ips.length) {
+                const empty = document.createElement('div');
+                empty.className = 'log-item safe';
+                empty.innerHTML = `
+                    <div class="log-time">Info</div>
+                    <div>No public IPs captured in this window</div>
+                `;
+                container.appendChild(empty);
+                return;
+            }
+
+            ips.forEach((ip, index) => {
+                const item = document.createElement('div');
+                item.className = 'log-item safe';
+                item.innerHTML = `
+                    <div class="log-time">#${index + 1}</div>
+                    <div>${ip}</div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function log(time, msg, type) {
+            const container = document.getElementById('log');
+            const item = document.createElement('div');
+            item.className = `log-item ${type}`;
+            item.innerHTML = `
+                <div class="log-time">${time}</div>
+                <div>${msg}</div>
+            `;
+            container.insertBefore(item, container.firstChild);
+            
+            while (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+        }
+    </script>
+</body>
+</html>
